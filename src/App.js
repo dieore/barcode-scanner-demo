@@ -4,8 +4,10 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 const QRBarcodeScanner = () => {
   const videoRef = useRef(null);
   const readerRef = useRef(null);
+  const streamRef = useRef(null); // guardar referencia al stream
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState("");
+  const [flashOn, setFlashOn] = useState(false);
   const lastResultRef = useRef(""); // para ignorar duplicados consecutivos
   const scanningRef = useRef(false); // ref para verificar estado en callback
 
@@ -42,12 +44,12 @@ const QRBarcodeScanner = () => {
       // 🎯 Solo QR y códigos de barras más comunes (2-3x más rápido)
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.QR_CODE,        // QR codes
-        BarcodeFormat.EAN_13,         // Barcode productos (13 dígitos)
+        // BarcodeFormat.EAN_13,         // Barcode productos (13 dígitos)
         BarcodeFormat.EAN_8,          // Barcode productos (8 dígitos)
         BarcodeFormat.CODE_128,       // Barcode alfanumérico común
         BarcodeFormat.CODE_39,        // Barcode alfanumérico
-        BarcodeFormat.UPC_A,          // Barcode USA/Canadá
-        BarcodeFormat.UPC_E,          // Barcode USA/Canadá compacto
+        // BarcodeFormat.UPC_A,          // Barcode USA/Canadá
+        // BarcodeFormat.UPC_E,          // Barcode USA/Canadá compacto
       ]);
 
       reader.hints = hints;
@@ -80,6 +82,11 @@ const QRBarcodeScanner = () => {
           }
         }
       );
+
+      // Guardar referencia al stream para controlar flash/enfoque
+      if (videoRef.current && videoRef.current.srcObject) {
+        streamRef.current = videoRef.current.srcObject;
+      }
     } catch (err) {
       console.error("Error al iniciar cámara:", err);
       alert("No se pudo acceder a la cámara. Verifica permisos.");
@@ -91,6 +98,7 @@ const QRBarcodeScanner = () => {
   const stopScan = () => {
     scanningRef.current = false;
     setScanning(false);
+    setFlashOn(false);
     
     if (readerRef.current) {
       try {
@@ -108,7 +116,65 @@ const QRBarcodeScanner = () => {
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
+    
+    streamRef.current = null;
   };
+
+  // 💡 Toggle flash (linterna)
+  // const toggleFlash = async () => {
+  //   if (!streamRef.current) return;
+
+  //   const track = streamRef.current.getVideoTracks()[0];
+  //   if (!track) return;
+
+  //   try {
+  //     const capabilities = track.getCapabilities();
+  //     if (capabilities.torch) {
+  //       await track.applyConstraints({
+  //         advanced: [{ torch: !flashOn }]
+  //       });
+  //       setFlashOn(!flashOn);
+  //     } else {
+  //       alert("Tu dispositivo no soporta flash/linterna");
+  //     }
+  //   } catch (err) {
+  //     console.error("Error al controlar flash:", err);
+  //     alert("No se pudo activar el flash");
+  //   }
+  // };
+
+  // 🎯 Forzar enfoque manual
+  // const triggerFocus = async () => {
+  //   if (!streamRef.current) return;
+
+  //   const track = streamRef.current.getVideoTracks()[0];
+  //   if (!track) return;
+
+  //   try {
+  //     const capabilities = track.getCapabilities();
+  //     if (capabilities.focusMode && capabilities.focusMode.includes('single-shot')) {
+  //       // Cambiar temporalmente a single-shot para forzar enfoque
+  //       await track.applyConstraints({
+  //         advanced: [{ focusMode: 'single-shot' }]
+  //       });
+  //       // Volver a continuous después de un momento
+  //       setTimeout(async () => {
+  //         try {
+  //           await track.applyConstraints({
+  //             advanced: [{ focusMode: 'continuous' }]
+  //           });
+  //         } catch (e) {
+  //           console.error("Error al volver a continuous:", e);
+  //         }
+  //       }, 500);
+  //     } else {
+  //       alert("Tu dispositivo no soporta enfoque manual");
+  //     }
+  //   } catch (err) {
+  //     console.error("Error al enfocar:", err);
+  //     alert("No se pudo enfocar");
+  //   }
+  // };
 
   // limpieza al desmontar
   useEffect(() => {
@@ -141,15 +207,32 @@ const QRBarcodeScanner = () => {
         />
       </div>
 
-      {!scanning ? (
-        <button onClick={startScan} style={{ padding: "0.5rem 1rem" }}>
-          📷 Iniciar escaneo
-        </button>
-      ) : (
-        <button onClick={stopScan} style={{ padding: "0.5rem 1rem" }}>
-          🛑 Detener
-        </button>
-      )}
+      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center", flexWrap: "wrap" }}>
+        {!scanning ? (
+          <button onClick={startScan} style={{ padding: "0.5rem 1rem" }}>
+            📷 Iniciar escaneo
+          </button>
+        ) : (
+          <>
+            <button onClick={stopScan} style={{ padding: "0.5rem 1rem" }}>
+              🛑 Detener
+            </button>
+            {/* <button 
+              onClick={toggleFlash} 
+              style={{ 
+                padding: "0.5rem 1rem",
+                backgroundColor: flashOn ? "#ffd700" : "#fff",
+                border: "1px solid #000"
+              }}
+            >
+              {flashOn ? "💡 Flash ON" : "🔦 Flash"}
+            </button>
+            <button onClick={triggerFocus} style={{ padding: "0.5rem 1rem" }}>
+              🎯 Enfocar
+            </button> */}
+          </>
+        )}
+      </div>
 
       {result && (
         <p style={{ marginTop: "1rem", wordBreak: "break-all" }}>
