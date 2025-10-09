@@ -7,6 +7,7 @@ const QRBarcodeScanner = () => {
   const streamRef = useRef(null); // guardar referencia al stream
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState("");
+  const [scanCount, setScanCount] = useState(0); // contador de escaneos
   const [flashOn, setFlashOn] = useState(false);
   const lastResultRef = useRef(""); // para ignorar duplicados consecutivos
   const scanningRef = useRef(false); // ref para verificar estado en callback
@@ -26,6 +27,7 @@ const QRBarcodeScanner = () => {
     if (scanning) return;
 
     setResult("");
+    setScanCount(0);
     lastResultRef.current = "";
     setScanning(true);
     scanningRef.current = true;
@@ -44,7 +46,7 @@ const QRBarcodeScanner = () => {
       // 🎯 Solo QR y códigos de barras más comunes (2-3x más rápido)
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.QR_CODE,        // QR codes
-        // BarcodeFormat.EAN_13,         // Barcode productos (13 dígitos)
+        BarcodeFormat.EAN_13,         // Barcode productos (13 dígitos)
         BarcodeFormat.EAN_8,          // Barcode productos (8 dígitos)
         BarcodeFormat.CODE_128,       // Barcode alfanumérico común
         BarcodeFormat.CODE_39,        // Barcode alfanumérico
@@ -73,11 +75,18 @@ const QRBarcodeScanner = () => {
         (res, err) => {
           if (res && scanningRef.current) {
             const text = res.getText();
-            // 🚫 ignorar si es el mismo código que el último
-            if (text === lastResultRef.current) return;
+            
+            // Si es el mismo código, incrementar contador
+            if (text === lastResultRef.current) {
+              setScanCount(prev => prev + 1);
+              beep();
+              return;
+            }
 
+            // Nuevo código detectado
             lastResultRef.current = text;
             setResult(text);
+            setScanCount(1);
             beep();
           }
         }
@@ -235,9 +244,16 @@ const QRBarcodeScanner = () => {
       </div>
 
       {result && (
-        <p style={{ marginTop: "1rem", wordBreak: "break-all" }}>
-          <strong>Resultado:</strong> {result}
-        </p>
+        <div style={{ marginTop: "1rem" }}>
+          <p style={{ wordBreak: "break-all" }}>
+            <strong>Resultado:</strong> {result}
+          </p>
+          {scanCount > 1 && (
+            <p style={{ color: "#0066cc", fontWeight: "bold", marginTop: "0.5rem" }}>
+              📊 Producto escaneado {scanCount} veces
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
