@@ -6,57 +6,85 @@ const QRBarcodeScanner = () => {
   const readerRef = useRef(null);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState("");
+  const lastResultRef = useRef(""); // para ignorar duplicados consecutivos
+  const scanningRef = useRef(false); // ref para verificar estado en callback
+
+  // 🔊 beep usando Web Audio API (funciona sin autoplay)
+  const beep = () => {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(1000, ctx.currentTime); // 1000Hz
+    oscillator.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.1); // 0.1s beep
+  };
 
   const startScan = async () => {
     if (scanning) return;
 
     setResult("");
+    lastResultRef.current = "";
     setScanning(true);
+    scanningRef.current = true;
 
     try {
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
-      // 🔹 Inicia escaneo desde cámara trasera con resolución y enfoque
       await reader.decodeFromConstraints(
         {
           video: {
             facingMode: "environment",
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            focusMode: "continuous", // enfoque automático si el dispositivo lo soporta
+            focusMode: "continuous", // intenta enfoque automático
           },
         },
         videoRef.current,
         (res, err) => {
-          if (res) {
-            setResult(res.getText());
-            // 👇 comentar la siguiente línea si querés escanear varios códigos seguidos
-            // stopScan();
+          if (res && scanningRef.current) {
+            const text = res.getText();
+            // 🚫 ignorar si es el mismo código que el último
+            if (text === lastResultRef.current) return;
+
+            lastResultRef.current = text;
+            setResult(text);
+            beep();
           }
-          // ignorar errores normales de detección
         }
       );
     } catch (err) {
       console.error("Error al iniciar cámara:", err);
       alert("No se pudo acceder a la cámara. Verifica permisos.");
       setScanning(false);
+      scanningRef.current = false;
     }
   };
 
-  const stopScan = async () => {
+  const stopScan = () => {
+    scanningRef.current = false;
+    setScanning(false);
+    
     if (readerRef.current) {
       try {
-        await readerRef.current.stopContinuousDecode();
+        readerRef.current.reset();
       } catch (err) {
-        console.error("Error al detener cámara:", err);
+        console.error("Error al detener decodificador:", err);
       }
       readerRef.current = null;
     }
-    setScanning(false);
+    
+    // Detener el stream de video
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject;
+      const tracks = stream.getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
   };
 
-  // Limpieza al desmontar
+  // limpieza al desmontar
   useEffect(() => {
     return () => {
       stopScan();
@@ -82,6 +110,8 @@ const QRBarcodeScanner = () => {
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
           muted
           autoPlay
+          playsInline // importante para móviles
+          
         />
       </div>
 
