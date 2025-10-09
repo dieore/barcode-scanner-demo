@@ -32,13 +32,39 @@ const QRBarcodeScanner = () => {
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
 
+      // ⚡ Configurar hints para optimizar velocidad de detección
+      const hints = new Map();
+      const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
+      
+      // Intentar más rápido con menos precisión
+      hints.set(DecodeHintType.TRY_HARDER, false); // false = más rápido
+      
+      // 🎯 Solo QR y códigos de barras más comunes (2-3x más rápido)
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.QR_CODE,        // QR codes
+        BarcodeFormat.EAN_13,         // Barcode productos (13 dígitos)
+        BarcodeFormat.EAN_8,          // Barcode productos (8 dígitos)
+        BarcodeFormat.CODE_128,       // Barcode alfanumérico común
+        BarcodeFormat.CODE_39,        // Barcode alfanumérico
+        BarcodeFormat.UPC_A,          // Barcode USA/Canadá
+        BarcodeFormat.UPC_E,          // Barcode USA/Canadá compacto
+      ]);
+
+      reader.hints = hints;
+
       await reader.decodeFromConstraints(
         {
           video: {
             facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            focusMode: "continuous", // intenta enfoque automático
+            // 🎯 Resolución alta para mejor detección
+            width: { ideal: 1920, min: 1280 },
+            height: { ideal: 1080, min: 720 },
+            // 🚀 Framerate alto para capturar más frames
+            frameRate: { ideal: 60, min: 30 },
+            // 📸 Enfoque continuo y automático
+            focusMode: "continuous",
+            // Otras optimizaciones de cámara
+            aspectRatio: { ideal: 16/9 },
           },
         },
         videoRef.current,
