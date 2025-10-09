@@ -1,63 +1,42 @@
 import React, { useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const QRScanner = () => {
-  const qrRef = useRef(null);
+  const videoRef = useRef(null);
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState("");
-  const [html5QrCode, setHtml5QrCode] = useState(null);
+  const [reader] = useState(() => new BrowserMultiFormatReader());
 
   const startScan = async () => {
     if (scanning) return;
-
-    const elementId = "qr-reader";
-    const qr = new Html5Qrcode(elementId);
-    setHtml5QrCode(qr);
     setResult("");
+    setScanning(true);
 
     try {
-      const devices = await Html5Qrcode.getCameras();
-      if (!devices || devices.length === 0) {
-        alert("No se encontraron cámaras");
-        return;
-      }
+      const devices = await reader.listVideoInputDevices();
+      const backCam =
+        devices.find((d) => d.label.toLowerCase().includes("back")) ||
+        devices[0];
 
-      const cameraId =
-        devices.find((d) => d.label.toLowerCase().includes("back"))
-          ?.id || devices[0].id;
-
-      await qr.start(
-        { deviceId: { exact: cameraId } },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        (decodedText) => {
-          setResult(decodedText);
-          stopScan(); // detener después de leer uno
-        },
-        (errorMessage) => {
-          // errores de lectura normales, ignorar
+      await reader.decodeFromVideoDevice(
+        backCam.deviceId,
+        videoRef.current,
+        (res, err) => {
+          if (res) {
+            setResult(res.getText());
+            stopScan();
+          }
         }
       );
-
-      setScanning(true);
     } catch (err) {
-      console.error("Error al iniciar escaneo:", err);
-      alert("Error al iniciar cámara");
+      console.error("Error al iniciar cámara:", err);
+      setScanning(false);
     }
   };
 
-  const stopScan = async () => {
-    if (html5QrCode) {
-      try {
-        await html5QrCode.stop();
-        await html5QrCode.clear();
-      } catch (err) {
-        console.error("Error al detener cámara:", err);
-      }
-      setScanning(false);
-    }
+  const stopScan = () => {
+    reader.reset();
+    setScanning(false);
   };
 
   return (
@@ -65,15 +44,18 @@ const QRScanner = () => {
       <h2>Escáner QR / Código de Barras</h2>
 
       <div
-        id="qr-reader"
-        ref={qrRef}
         style={{
-          width: "300px",
-          height: "300px",
+          width: 300,
+          height: 300,
           border: "2px solid #000",
           margin: "1rem auto",
         }}
-      />
+      >
+        <video
+          ref={videoRef}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
 
       {!scanning ? (
         <button onClick={startScan}>📷 Iniciar escaneo</button>
